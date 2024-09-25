@@ -31,6 +31,50 @@ scalar(double *data, ptrdiff_t count)
 	return result;
 }
 
+static double
+simd2x1_no_align(double *data, ptrdiff_t count)
+{
+	assert(count % 2 == 0);
+	simd_double2 acc = 0;
+	for (ptrdiff_t i = 0; i < count; i += 2)
+	{
+		acc += *(simd_double2 *)(data + i);
+	}
+	return simd_reduce_add(acc);
+}
+
+static double
+simd8x1_no_align(double *data, ptrdiff_t count)
+{
+	assert(count % 8 == 0);
+	simd_double8 acc = 0;
+	for (ptrdiff_t i = 0; i < count; i += 8)
+	{
+		acc += *(simd_double8 *)(data + i);
+	}
+	return simd_reduce_add(acc);
+}
+
+static double
+simd8x4_no_align(double *data, ptrdiff_t count)
+{
+	assert(count % (8 * 4) == 0);
+	simd_double8 acc0 = 0;
+	simd_double8 acc1 = 0;
+	simd_double8 acc2 = 0;
+	simd_double8 acc3 = 0;
+	for (ptrdiff_t i = 0; i < count; i += 8 * 4)
+	{
+		simd_double8 *p = (simd_double8 *)(data + i);
+		acc0 += p[0];
+		acc1 += p[1];
+		acc2 += p[2];
+		acc3 += p[3];
+	}
+	return simd_reduce_add(acc0) + simd_reduce_add(acc1) + simd_reduce_add(acc2) +
+	       simd_reduce_add(acc3);
+}
+
 static void
 run(char *name,
         double (*impl)(double *, ptrdiff_t),
@@ -38,7 +82,7 @@ run(char *name,
         ptrdiff_t count,
         double expected_sum)
 {
-	ptrdiff_t run_count = 1000;
+	ptrdiff_t run_count = 10000;
 	double *run_results = calloc(run_count, sizeof(double));
 
 	ptrdiff_t before = cycle_count();
@@ -55,7 +99,7 @@ run(char *name,
 
 	ptrdiff_t cycles = after - before;
 
-	printf("%20s: %4.f Mcycles, %.2f cycles/element, %.2f elements/cycle\n", name,
+	printf("%20s: %4.f Mcycles, %.3f cycles/element, %.3f elements/cycle\n", name,
 	        (double)cycles / 1000000, (double)cycles / (double)(count * run_count),
 	        (double)(count * run_count) / (double)cycles);
 }
@@ -74,4 +118,7 @@ main(void)
 	}
 
 	run("scalar", scalar, data, count, expected_sum);
+	run("simd2x1_no_align", simd2x1_no_align, data, count, expected_sum);
+	run("simd8x1_no_align", simd8x1_no_align, data, count, expected_sum);
+	run("simd8x4_no_align", simd8x4_no_align, data, count, expected_sum);
 }
